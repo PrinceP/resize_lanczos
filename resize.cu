@@ -31,8 +31,14 @@
 #define IMAGING_TRANSFORM_BICUBIC 3
 #define IMAGING_TRANSFORM_LANCZOS 1
 
+
 typedef void (*ResampleFunction)(unsigned char *pOut, unsigned char *pIn, int offset,
-                               int ksize, int *bounds, double *prekk, int inpWd, int inpHt, int inpStride, int outWd, int outHt, int outStride, int imType, int channels);
+                               int ksize, int *bounds, 
+                               double *prekk, 
+                               int inpWd, int inpHt, int inpStride, 
+                               int outWd, int outHt, int outStride, 
+                               int imType, int channels);
+
 struct filter {
     double (*filter)(double x);
     double support;
@@ -194,6 +200,90 @@ UINT8 _clip8_lookups[1280] = {
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 };
 
+__device__ UINT8 _clip8_lookups_cuda[1280] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+    48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+    64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79,
+    80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95,
+    96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+    112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+    128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143,
+    144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
+    160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175,
+    176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191,
+    192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207,
+    208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223,
+    224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239,
+    240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+};
+
+
 UINT8 *clip8_lookups = &_clip8_lookups[640];
 
 static inline UINT8 clip8(int in)
@@ -201,6 +291,14 @@ static inline UINT8 clip8(int in)
     //printf("%d\n", in);
     return clip8_lookups[in >> PRECISION_BITS];
 }
+
+
+__device__ static inline UINT8 clip8_cuda(int in)
+{
+    //printf("%d\n", in);
+    return _clip8_lookups_cuda[in >> PRECISION_BITS];
+}
+
 
 
 int
@@ -255,14 +353,14 @@ precompute_coeffs(int inSize, float in0, float in1, int outSize,
         ss = 1.0 / filterscale;
         // Round the value
         xmin = (int) (center - support + 0.5); // -1.8 -> -2 ,,  3.7 - 5 + 0.5 -> -0.8 . -1
-        printf("support = %f\n", support);
-        printf("xmin = %d\n", xmin);
+        // printf("support = %f\n", support);
+        // printf("xmin = %d\n", xmin);
         // TODO
         // if (xmin < 0)
         //     xmin = 0;
         // Round the value
         xmax = (int) (center + support + 0.5); // 3.2 + 5 + 0.5 -> 8 . 3.7 + 5 + 0.5  -> 9.2  9
-        printf("xmax = %d\n", xmax);
+        // printf("xmax = %d\n", xmax);
         
         // TODO
         // if (xmax > inSize)
@@ -290,10 +388,10 @@ precompute_coeffs(int inSize, float in0, float in1, int outSize,
         for (; x < ksize; x++) {
             k[x] = 0;
         }
-        printf("xmin = %d :: xmax = %d\n", xmin, xmax);
-        for (x = 0; x < xmax; x++)
-            printf("%f ", k[x]);
-        printf("\n");
+        // printf("xmin = %d :: xmax = %d\n", xmin, xmax);
+        // for (x = 0; x < xmax; x++)
+        //     printf("%f ", k[x]);
+        // printf("\n");
         bounds[xx * 2 + 0] = xmin;
         bounds[xx * 2 + 1] = xmax;
     }
@@ -324,10 +422,43 @@ normalize_coeffs_8bpc(int outSize, int ksize, double *prekk)
     }
 }
 
+__global__ void verticalKernel( unsigned char *pOut, unsigned char *pIn, 
+                                int *bounds,  int* kk, 
+                                int dst_width, int dst_height, 
+                                int ksize, int inpStride, int outStride,
+                                int inpHt,
+                                int edge){
+
+    int position = blockDim.x * blockIdx.x + threadIdx.x;
+    if (position >= edge) return;
+
+    int dy = position % dst_width;
+    int dx = position / dst_width;
+
+    int *k = &kk[dy * ksize];
+    int ymin = bounds[dy * 2 + 0];
+    int ymax = bounds[dy * 2 + 1];
+        
+    int ss0 = 1 << (PRECISION_BITS -1);
+
+    for (int y = 0; y < ymax; y++)
+    {   
+        if(y + ymin >= 0 && y + ymin < inpHt){
+            // if(xx == 12)
+                // printf("%d ", ((UINT8) pIn[(y + ymin)*inpStride + channels*xx + c]) * k[y]);
+            ss0 += ((UINT8) pIn[(y + ymin)*inpStride + 1*dx + 0]) * k[y];
+        }
+        pOut[dy*outStride + 1*dx + 0] = clip8_cuda(ss0);
+    }
+
+}
 
 void
 ImagingResampleVertical_8bpc(unsigned char *pOut, unsigned char *pIn, int offset,
-                             int ksize, int *bounds, double *prekk, int inpWd, int inpHt, int inpStride, int outWd, int outHt, int outStride, int imType, int channels)
+                             int ksize, int *bounds, 
+                             double *prekk, int inpWd, int inpHt, int inpStride, 
+                             int outWd, int outHt, int outStride, 
+                             int imType, int channels)
 {
     int ss0, ss1, ss2, ss3;
     int xx, yy, y, ymin, ymax;
@@ -338,82 +469,41 @@ ImagingResampleVertical_8bpc(unsigned char *pOut, unsigned char *pIn, int offset
     kk = (INT32 *) prekk;
     normalize_coeffs_8bpc(outHt, ksize, prekk);
 
-    printf("calling vertical resample\n");
+    printf("%d %d\n", outHt, outWd);
+    // int jobs = outHt * outWd;
+    // int threads = 256;
+    // int blocks = ceil(jobs / (float)threads);
+    // verticalKernel<<<blocks,threads>>>(pOut, pIn, bounds, kk, outWd, outHt, ksize, inpStride, outStride, inpHt, jobs);
+    
     for (yy = 0; yy < outHt; yy++) {
         k = &kk[yy * ksize];
         ymin = bounds[yy * 2 + 0];
         ymax = bounds[yy * 2 + 1];
         for (xx = 0; xx < outWd; xx++) {
-	    for (c = 0; c < channels; c++){
-                ss0 = 1 << (PRECISION_BITS -1);
-                
-                
-                for (y = 0; y < ymax; y++)
-                {   
-
-                    
-                    if(y + ymin >= 0 && y + ymin < inpHt){
-                        if(xx == 12)
-                            printf("%d ", ((UINT8) pIn[(y + ymin)*inpStride + channels*xx + c]) * k[y]);
-                        ss0 += ((UINT8) pIn[(y + ymin)*inpStride + channels*xx + c]) * k[y];
-                
+            for (c = 0; c < channels; c++){
+                    ss0 = 1 << (PRECISION_BITS -1);
+                    for (y = 0; y < ymax; y++)
+                    {   
+                        if(y + ymin >= 0 && y + ymin < inpHt){
+                            // if(xx == 12)
+                                // printf("%d ", ((UINT8) pIn[(y + ymin)*inpStride + channels*xx + c]) * k[y]);
+                            ss0 += ((UINT8) pIn[(y + ymin)*inpStride + channels*xx + c]) * k[y];
+                        }
                     }
-                        
+                    // if(xx == 12)
+                        // printf("\n");                  
+                    
+                    
+                    pOut[yy*outStride + channels*xx + c] = clip8(ss0);
                 }
-
-                if(xx == 12)
-                    printf("\n");
-                  
-                pOut[yy*outStride + channels*xx + c] = clip8(ss0);
             }
-        }
     }
 }
 
-__global__  void
-ImagingResampleHorizontal_8bpc_kernel( unsigned char *pOut, unsigned char *pIn, 
-                                int offset,
-                                int ksize, 
-                                int *bounds, 
-                                double *prekk, 
-                                int inpWd, int inpHt, int inpStride, 
-                                int outWd, int outHt, int outStride, 
-                                int imType, int channels,
-                                int jobs)
-{
 
-    int position = blockDim.x * blockIdx.x + threadIdx.x;
-    if (position >= jobs) return;
-
-    int ss0, ss1, ss2, ss3;
-    int xx, yy, x, xmin, xmax;
-    int *k, *kk;
-    int c;
-    kk = (int *) prekk;
-    normalize_coeffs_8bpc(outWd, ksize, prekk);
-    
-    
-    
-    for (yy = 0; yy < outHt; yy++) {
-        for (xx = 0; xx < outWd; xx++) {
-            xmin = bounds[xx * 2 + 0];
-            xmax = bounds[xx * 2 + 1];
-            k = &kk[xx * ksize];
-            for (c = 0; c < channels; c++){
-                ss0 = 1 << (PRECISION_BITS -1);
-                for (x = 0; x < xmax ; x++)
-                {
-                    if(x + xmin >= 0 && x + xmin < inpWd){
-                        ss0 += ((UINT8) pIn[inpStride*(yy + 0) + channels*(x + xmin) + c]) * k[x];
-                    }
-                }
-                pOut[yy*outStride + channels*xx + c] = clip8(ss0);
-            }
-        }
-    } 
+__global__ void do_process(int *a, int *b, int *c) {
+    *c = *a + *b;
 }
-
-
 
 void
 ImagingResampleHorizontal_8bpc(unsigned char *pOut, unsigned char *pIn, int offset,
@@ -425,7 +515,13 @@ ImagingResampleHorizontal_8bpc(unsigned char *pOut, unsigned char *pIn, int offs
     int c;
     kk = (int *) prekk;
     normalize_coeffs_8bpc(outWd, ksize, prekk);
-    // threadId.x, blockId.x
+
+    // int jobs = dst_height * dst_width;
+    // int threads = 256;
+    // int blocks = ceil(jobs / (float)threads);
+
+    printf("%d %d\n", outHt, outWd);
+
     for (yy = 0; yy < outHt; yy++) {
         for (xx = 0; xx < outWd; xx++) {
             xmin = bounds[xx * 2 + 0];
@@ -469,7 +565,7 @@ int ImagingResampleInner(   unsigned char *pIn, unsigned char *pOut,
     printf("Need Horizontal: %d \n", need_horizontal);
     printf("Need Vertical: %d \n", need_vertical);
 
-
+    
     ksize_horiz = precompute_coeffs(inpWd, box[0], box[2], xsize,
                                     filterp, &bounds_horiz, &kk_horiz);
     if ( ! ksize_horiz) {
@@ -509,20 +605,23 @@ int ImagingResampleInner(   unsigned char *pIn, unsigned char *pOut,
 
     if (pImTemp) {
         
-
-        int jobs = 32*32;
-        int threads = 256;
-        int blocks = ceil(jobs / (float)threads);
-        
-        ResampleHorizontal<<<blocks, threads>>>(pImTemp, pIn, ybox_first,
+        ResampleHorizontal(pImTemp, pIn, ybox_first,
                             ksize_horiz, 
                             bounds_horiz, 
                             kk_horiz, 
                             inpWd, inpHt, inpStride, 
                             xsize, inpHt, stride, 
-                            imType, channels,
-                            jobs);
-    
+                            imType, channels
+                            );
+        
+        //  ResampleHorizontal<<<1,1>>>(pImTemp, pIn, ybox_first,
+        //                     ksize_horiz, 
+        //                     bounds_horiz, 
+        //                     kk_horiz, 
+        //                     inpWd, inpHt, inpStride, 
+        //                     xsize, inpHt, stride, 
+        //                     imType, channels,
+        //                     jobs);
     
     }
     free(bounds_horiz);
@@ -548,8 +647,21 @@ int ImagingResampleInner(   unsigned char *pIn, unsigned char *pOut,
 
         if (1) {
             /* imIn can be the original image or horizontally resampled one */
-            ResampleVertical(pOut, pIn2, 0,
-                             ksize_vert, bounds_vert, kk_vert, xsize, inpHt, stride, xsize, ysize, outStride, imType, channels);
+            ResampleVertical(  pOut, pIn2, 0,
+                                ksize_vert, 
+                                bounds_vert, 
+                                kk_vert, 
+                                xsize, inpHt, stride, xsize, ysize, 
+                                outStride, imType, channels);
+
+            // ResampleVertical<<<1,1>>>(  pOut, pIn2, 0,
+            //                     ksize_vert, 
+            //                     bounds_vert, 
+            //                     kk_vert, 
+            //                     xsize, inpHt, stride, xsize, ysize, 
+            //                     outStride, imType, channels,
+            //                     jobs);
+
         }
 
         /* it's safe to call ImagingDelete with empty value
@@ -583,6 +695,8 @@ int ImagingResampleInner(   unsigned char *pIn, unsigned char *pOut,
 int ImagingResample(unsigned char *pIn, unsigned char *pOut, int inpWd, int inpHt, int inpStride, int xsize, int ysize, int outStride, int filter, float box[4], int imType, int channels)
 {
     struct filter *filterp;
+    // ResampleFunctionCuda ResampleHorizontal;
+    // ResampleFunctionCuda ResampleVertical;
     ResampleFunction ResampleHorizontal;
     ResampleFunction ResampleVertical;
 
@@ -590,8 +704,8 @@ int ImagingResample(unsigned char *pIn, unsigned char *pOut, int inpWd, int inpH
     
         switch(imType) {
             case IMAGING_TYPE_UINT8:
-                ResampleHorizontal = ImagingResampleHorizontal_8bpc_kernel;  //ImagingResampleHorizontal_8bpc;
-                ResampleVertical = ImagingResampleVertical_8bpc;
+                ResampleHorizontal = ImagingResampleHorizontal_8bpc; //ImagingResampleHorizontal_8bpc_kernel;  //ImagingResampleHorizontal_8bpc;
+                ResampleVertical = ImagingResampleVertical_8bpc; // ImagingResampleVertical_8bpc_kernel; // ImagingResampleVertical_8bpc;
                 break;
             case IMAGING_TYPE_INT32:
             case IMAGING_TYPE_FLOAT32:
@@ -722,7 +836,7 @@ int main(int argc, char *argv[])
 
     ret = resizeModPIL(pIn, pOut, inpWd, inpHt, inpStride, outWd, outHt, outStride, nCh);
     printf("return status = %d\n", ret);
-    fp1 = fopen("./LM_resize.raw", "wb");
+    fp1 = fopen("./LM_resized.raw", "wb");
     // fp1 = fopen("./car1_resized.raw", "wb");
     // fp1 = fopen("./car2_resized.raw", "wb");
     // fp1 = fopen("./car3_resized.raw", "wb");

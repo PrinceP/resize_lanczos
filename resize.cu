@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <iostream>
 
 #define ROUND_UP(f) ((int) ((f) >= 0.0 ? (f) + 0.5F : (f) - 0.5F))
 #define UINT8 unsigned char
@@ -200,6 +201,15 @@ UINT8 _clip8_lookups[1280] = {
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 };
 
+UINT8 *clip8_lookups = &_clip8_lookups[640];
+
+static inline UINT8 clip8(int in)
+{
+    //printf("%d\n", in);
+    return clip8_lookups[in >> PRECISION_BITS];
+}
+
+
 __device__ UINT8 _clip8_lookups_cuda[1280] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -283,20 +293,12 @@ __device__ UINT8 _clip8_lookups_cuda[1280] = {
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 };
 
-
-UINT8 *clip8_lookups = &_clip8_lookups[640];
-
-static inline UINT8 clip8(int in)
-{
-    //printf("%d\n", in);
-    return clip8_lookups[in >> PRECISION_BITS];
-}
-
+__device__ UINT8 *clip8_lookups_cuda = &_clip8_lookups_cuda[640];
 
 __device__ static inline UINT8 clip8_cuda(int in)
 {
     //printf("%d\n", in);
-    return _clip8_lookups_cuda[in >> PRECISION_BITS];
+    return clip8_lookups_cuda[in >> PRECISION_BITS];
 }
 
 
@@ -421,37 +423,36 @@ normalize_coeffs_8bpc(int outSize, int ksize, double *prekk)
         }
     }
 }
-
 __global__ void verticalKernel( unsigned char *pOut, unsigned char *pIn, 
                                 int *bounds,  int* kk, 
                                 int dst_width, int dst_height, 
                                 int ksize, int inpStride, int outStride,
                                 int inpHt,
-                                int edge){
-
-    int position = blockDim.x * blockIdx.x + threadIdx.x;
-    if (position >= edge) return;
-
-    int dy = position % dst_width;
-    int dx = position / dst_width;
+                                int channels){        
+    int dx = threadIdx.x;
+    int dy = threadIdx.y;
+    int ss0;
 
     int *k = &kk[dy * ksize];
     int ymin = bounds[dy * 2 + 0];
     int ymax = bounds[dy * 2 + 1];
-        
-    int ss0 = 1 << (PRECISION_BITS -1);
-
-    for (int y = 0; y < ymax; y++)
-    {   
-        if(y + ymin >= 0 && y + ymin < inpHt){
-            // if(xx == 12)
-                // printf("%d ", ((UINT8) pIn[(y + ymin)*inpStride + channels*xx + c]) * k[y]);
-            ss0 += ((UINT8) pIn[(y + ymin)*inpStride + 1*dx + 0]) * k[y];
+    for (int c = 0; c < channels; c++){ // channel - 1
+        ss0 = 1 << (PRECISION_BITS -1);
+        for (int y = 0; y < ymax; y++)
+        {   
+            if(y + ymin >= 0 && y + ymin < inpHt){
+                // if(xx == 12)
+                    // printf("%d ", ((UINT8) pIn[(y + ymin)*inpStride + channels*xx + c]) * k[y]);
+                ss0 += ((UINT8) pIn[(y + ymin)*inpStride + channels*dx + c]) * k[y];
+            }
         }
-        pOut[dy*outStride + 1*dx + 0] = clip8_cuda(ss0);
+        // if(xx == 12)
+            // printf("\n");                  
+        pOut[dy*outStride + channels*dx + c] = clip8_cuda(ss0);
     }
-
+    
 }
+
 
 void
 ImagingResampleVertical_8bpc(unsigned char *pOut, unsigned char *pIn, int offset,
@@ -468,42 +469,119 @@ ImagingResampleVertical_8bpc(unsigned char *pOut, unsigned char *pIn, int offset
     // use the same buffer for normalized coefficients
     kk = (INT32 *) prekk;
     normalize_coeffs_8bpc(outHt, ksize, prekk);
-
-    printf("%d %d\n", outHt, outWd);
-    // int jobs = outHt * outWd;
-    // int threads = 256;
-    // int blocks = ceil(jobs / (float)threads);
-    // verticalKernel<<<blocks,threads>>>(pOut, pIn, bounds, kk, outWd, outHt, ksize, inpStride, outStride, inpHt, jobs);
     
+    printf("\n");
+    printf("CALL VERTICAL \n");
+    printf("%d %d\n", outHt, outWd);
+    printf("input Height : %d \n", inpHt);
+    printf("ksize : %d \n", ksize);
+    printf("outStride : %d \n", outStride);
+    printf("inpStride : %d \n", inpStride);
+    
+    dim3 dimBlock(outWd,outHt);
+    
+    int outSize = 32;
+    int size = 32;
+    int *bounds_gpu;
+    int *kk_gpu;
+
+    unsigned char *pOut_gpu;
+    unsigned char *pIn_gpu;
+
+    cudaMalloc((void**)&bounds_gpu, outSize * 2 * sizeof(int));
+    cudaMalloc((void**)&kk_gpu, outSize * ksize * sizeof(float));
+    
+    cudaMalloc((void**)&pIn_gpu, 32 * inpHt * 1 * 4  );
+
+    cudaMemcpy( bounds_gpu , bounds ,outSize * 2 * sizeof(int),cudaMemcpyHostToDevice);
+    cudaMemcpy( kk_gpu , kk ,outSize * ksize * sizeof(int),cudaMemcpyHostToDevice);
+
+    // TODO xsize is 32
+    cudaMemcpy(pIn_gpu, pIn ,32 * inpHt * 1 * 4 ,cudaMemcpyHostToDevice);
+
+    // Pout init
+    cudaMalloc((void**)&pOut_gpu, size * size );
+    
+    printf("CALL VERTICAL cuda\n");
+    verticalKernel<<<1, dimBlock>>>(pOut_gpu, pIn_gpu, bounds_gpu, kk_gpu, outWd, outHt, ksize, inpStride, outStride, inpHt, channels);
+    cudaDeviceSynchronize();
+    cudaMemcpy(pOut,pOut_gpu,size*size ,cudaMemcpyDeviceToHost);
     for (yy = 0; yy < outHt; yy++) {
-        k = &kk[yy * ksize];
-        ymin = bounds[yy * 2 + 0];
-        ymax = bounds[yy * 2 + 1];
         for (xx = 0; xx < outWd; xx++) {
-            for (c = 0; c < channels; c++){
-                    ss0 = 1 << (PRECISION_BITS -1);
-                    for (y = 0; y < ymax; y++)
-                    {   
-                        if(y + ymin >= 0 && y + ymin < inpHt){
-                            // if(xx == 12)
-                                // printf("%d ", ((UINT8) pIn[(y + ymin)*inpStride + channels*xx + c]) * k[y]);
-                            ss0 += ((UINT8) pIn[(y + ymin)*inpStride + channels*xx + c]) * k[y];
-                        }
-                    }
-                    // if(xx == 12)
-                        // printf("\n");                  
-                    
-                    
-                    pOut[yy*outStride + channels*xx + c] = clip8(ss0);
+            for (c = 0; c < channels; c++){ // channel - 1
+                    printf("%d ", (pOut[yy*outStride + channels*xx + c]));
                 }
             }
     }
+
+    printf("\n");    
+
+    // CPU call    
+    // for (yy = 0; yy < outHt; yy++) {
+    //     k = &kk[yy * ksize];
+    //     ymin = bounds[yy * 2 + 0];
+    //     ymax = bounds[yy * 2 + 1];
+    //     for (xx = 0; xx < outWd; xx++) {
+    //         for (c = 0; c < channels; c++){ // channel - 1
+    //                 ss0 = 1 << (PRECISION_BITS -1);
+    //                 for (y = 0; y < ymax; y++)
+    //                 {   
+    //                     if(y + ymin >= 0 && y + ymin < inpHt){
+    //                         // if(xx == 12)
+    //                             // printf("%d ", ((UINT8) pIn[(y + ymin)*inpStride + channels*xx + c]) * k[y]);
+    //                         ss0 += ((UINT8) pIn[(y + ymin)*inpStride + channels*xx + c]) * k[y];
+    //                     }
+    //                 }
+    //                 // if(xx == 12)
+    //                     // printf("\n");                  
+    //                 pOut[yy*outStride + channels*xx + c] = clip8(ss0);
+    //             }
+    //         }
+    // }
+    
+    // printf("\n");    
+    // for (yy = 0; yy < outHt; yy++) {
+    //     k = &kk[yy * ksize];
+    //     ymin = bounds[yy * 2 + 0];
+    //     ymax = bounds[yy * 2 + 1];
+    //     for (xx = 0; xx < outWd; xx++) {
+    //         for (c = 0; c < channels; c++){ // channel - 1
+    //                 printf("%d ", (pOut[yy*outStride + channels*xx + c]));
+    //             }
+    //         }
+    // }
+    
 }
 
 
-__global__ void do_process(int *a, int *b, int *c) {
-    *c = *a + *b;
-}
+__global__ void horizontalKernel(unsigned char *pOut, unsigned char *pIn, 
+                                int *bounds,  int* kk, 
+                                int dst_width, int dst_height, 
+                                int ksize, 
+                                int inpStride, int outStride,
+                                int inpWd,
+                                int channels){
+    
+    int dx = threadIdx.x;
+    int dy = threadIdx.y;
+    int ss0;
+
+    
+    int xmin = bounds[dx * 2 + 0];
+    int xmax = bounds[dx * 2 + 1];
+    int *k = &kk[dx * ksize];
+    for (int c = 0; c < channels; c++){
+        ss0 = 1 << (PRECISION_BITS -1);
+        for (int x = 0; x < xmax ; x++)
+        {
+            if(x + xmin >= 0 && x + xmin < inpWd){
+                ss0 += ((UINT8) pIn[inpStride*(dy + 0) + channels*(x + xmin) + c]) * k[x];
+            }
+        }
+        pOut[dy*outStride + channels*dx + c] = clip8_cuda(ss0);
+    }
+
+} 
 
 void
 ImagingResampleHorizontal_8bpc(unsigned char *pOut, unsigned char *pIn, int offset,
@@ -515,12 +593,46 @@ ImagingResampleHorizontal_8bpc(unsigned char *pOut, unsigned char *pIn, int offs
     int c;
     kk = (int *) prekk;
     normalize_coeffs_8bpc(outWd, ksize, prekk);
-
-    // int jobs = dst_height * dst_width;
-    // int threads = 256;
-    // int blocks = ceil(jobs / (float)threads);
-
+    
+    printf("\n");
+    printf("CALL HORIZONTAL \n");
     printf("%d %d\n", outHt, outWd);
+    printf("input Width : %d \n", inpWd);
+    printf("input Height : %d \n", inpHt);
+    
+    printf("ksize : %d \n", ksize);
+    printf("outStride : %d \n", outStride);
+    printf("inpStride : %d \n", inpStride);
+    
+    dim3 dimBlock(outWd,outHt);
+    
+    int outSize = 32;
+    int xsize = 32;
+    int *bounds_gpu;
+    int *kk_gpu;
+
+    unsigned char *pOut_gpu;
+    unsigned char *pIn_gpu;
+
+    cudaMalloc((void**)&bounds_gpu, outSize * 2 * sizeof(int));
+    cudaMalloc((void**)&kk_gpu, outSize * ksize * sizeof(float));
+    
+    cudaMalloc((void**)&pIn_gpu, inpWd * inpHt * 1);
+
+    cudaMemcpy( bounds_gpu , bounds ,outSize * 2 * sizeof(int),cudaMemcpyHostToDevice);
+    cudaMemcpy( kk_gpu , kk ,outSize * ksize * sizeof(int),cudaMemcpyHostToDevice);
+
+    
+    cudaMemcpy(pIn_gpu, pIn , inpWd * inpHt * 1 ,cudaMemcpyHostToDevice);
+
+    // TODO xsize is 32 
+    cudaMalloc((void**)&pOut_gpu,  32 * inpHt * 1 * 4 );
+    
+    // printf("CALL HORIZONTAL cuda\n");
+    // horizontalKernel<<<1, dimBlock>>>(pOut_gpu, pIn_gpu, bounds_gpu, kk_gpu, outWd, outHt, ksize, inpStride, outStride, inpWd, channels);
+    // cudaDeviceSynchronize();
+    // cudaMemcpy(pOut,pOut_gpu, 32 * inpHt * 1 * 4 , cudaMemcpyDeviceToHost);
+
 
     for (yy = 0; yy < outHt; yy++) {
         for (xx = 0; xx < outWd; xx++) {
@@ -538,7 +650,16 @@ ImagingResampleHorizontal_8bpc(unsigned char *pOut, unsigned char *pIn, int offs
                 pOut[yy*outStride + channels*xx + c] = clip8(ss0);
             }
         }
-    } 
+    }
+    for (yy = 0; yy < outHt; yy++) {
+        for (xx = 0; xx < outWd; xx++) {
+            for (c = 0; c < channels; c++){
+                printf("%d ", pOut[yy*outStride + channels*xx + c]);
+            }
+        }
+    }
+
+
 }
 
 int ImagingResampleInner(   unsigned char *pIn, unsigned char *pOut,
@@ -806,7 +927,6 @@ int resizeModPIL(unsigned char *pIn, unsigned char *pOut, int inpWd, int inpHt, 
 }
 int main(int argc, char *argv[])
 {
-
     // car1.jpg JPEG 350x174 350x174+0+0 8-bit sRGB 19.7KB 0.000u 0:00.000
     // car2.jpg[1] JPEG 572x342 572x342+0+0 8-bit sRGB 45.8KB 0.000u 0:00.000
     // car3.jpg[2] JPEG 228x174 228x174+0+0 8-bit sRGB 15.2KB 0.000u 0:00.000

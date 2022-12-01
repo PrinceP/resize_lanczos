@@ -560,10 +560,16 @@ __global__ void horizontalKernel(unsigned char *pOut, unsigned char *pIn,
                                 int ksize, 
                                 int inpStride, int outStride,
                                 int inpWd,
-                                int channels){
+                                int channels,
+                                int edge){
     
-    int dx = threadIdx.x;
-    int dy = threadIdx.y;
+    int position = blockDim.x * blockIdx.x + threadIdx.x;
+    if (position >= edge) return;
+
+    int dx = position % dst_width;
+    int dy = position / dst_width;
+    // int dx = threadIdx.x;
+    // int dy = threadIdx.y;
     int ss0;
 
     
@@ -571,7 +577,7 @@ __global__ void horizontalKernel(unsigned char *pOut, unsigned char *pIn,
     int xmax = bounds[dx * 2 + 1];
     int *k = &kk[dx * ksize];
     for (int c = 0; c < channels; c++){
-        ss0 = 1 << (PRECISION_BITS -1);
+        ss0 = 1 << (PRECISION_BITS - 1);
         for (int x = 0; x < xmax ; x++)
         {
             if(x + xmin >= 0 && x + xmin < inpWd){
@@ -604,7 +610,12 @@ ImagingResampleHorizontal_8bpc(unsigned char *pOut, unsigned char *pIn, int offs
     printf("outStride : %d \n", outStride);
     printf("inpStride : %d \n", inpStride);
     
-    dim3 dimBlock(outWd,outHt);
+
+    int jobs = outWd * outHt;
+    int threads = 256;
+    int blocks = ceil(jobs / (float)threads);
+
+    // dim3 dimBlock(outWd,outHt);
     
     int outSize = 32;
     int xsize = 32;
@@ -628,29 +639,29 @@ ImagingResampleHorizontal_8bpc(unsigned char *pOut, unsigned char *pIn, int offs
     // TODO xsize is 32 
     cudaMalloc((void**)&pOut_gpu,  32 * inpHt * 1 * 4 );
     
-    // printf("CALL HORIZONTAL cuda\n");
-    // horizontalKernel<<<1, dimBlock>>>(pOut_gpu, pIn_gpu, bounds_gpu, kk_gpu, outWd, outHt, ksize, inpStride, outStride, inpWd, channels);
-    // cudaDeviceSynchronize();
-    // cudaMemcpy(pOut,pOut_gpu, 32 * inpHt * 1 * 4 , cudaMemcpyDeviceToHost);
+    printf("CALL HORIZONTAL cuda\n");
+    horizontalKernel<<<blocks, threads>>>(pOut_gpu, pIn_gpu, bounds_gpu, kk_gpu, outWd, outHt, ksize, inpStride, outStride, inpWd, channels, jobs);
+    cudaDeviceSynchronize();
+    cudaMemcpy(pOut,pOut_gpu, 32 * inpHt * 1 * 4 , cudaMemcpyDeviceToHost);
 
 
-    for (yy = 0; yy < outHt; yy++) {
-        for (xx = 0; xx < outWd; xx++) {
-            xmin = bounds[xx * 2 + 0];
-            xmax = bounds[xx * 2 + 1];
-            k = &kk[xx * ksize];
-            for (c = 0; c < channels; c++){
-                ss0 = 1 << (PRECISION_BITS -1);
-                for (x = 0; x < xmax ; x++)
-                {
-                    if(x + xmin >= 0 && x + xmin < inpWd){
-                        ss0 += ((UINT8) pIn[inpStride*(yy + 0) + channels*(x + xmin) + c]) * k[x];
-                    }
-                }
-                pOut[yy*outStride + channels*xx + c] = clip8(ss0);
-            }
-        }
-    }
+    // for (yy = 0; yy < outHt; yy++) {
+    //     for (xx = 0; xx < outWd; xx++) {
+    //         xmin = bounds[xx * 2 + 0];
+    //         xmax = bounds[xx * 2 + 1];
+    //         k = &kk[xx * ksize];
+    //         for (c = 0; c < channels; c++){
+    //             ss0 = 1 << (PRECISION_BITS -1);
+    //             for (x = 0; x < xmax ; x++)
+    //             {
+    //                 if(x + xmin >= 0 && x + xmin < inpWd){
+    //                     ss0 += ((UINT8) pIn[inpStride*(yy + 0) + channels*(x + xmin) + c]) * k[x];
+    //                 }
+    //             }
+    //             pOut[yy*outStride + channels*xx + c] = clip8(ss0);
+    //         }
+    //     }
+    // }
     for (yy = 0; yy < outHt; yy++) {
         for (xx = 0; xx < outWd; xx++) {
             for (c = 0; c < channels; c++){
@@ -801,13 +812,13 @@ int ImagingResampleInner(   unsigned char *pIn, unsigned char *pOut,
     }
 
     /* none of the previous steps are performed, copying */
-    if ( ! (need_horizontal || need_vertical)) {
-    //printf("memcpy only\n");
-        //memcpy(pOut, pIn, xsize*ysize*((imType == IMAGING_TYPE_UINT8)?1:4)*channels);
-    int i;
-    for (i = 0; i < ysize; i++)
-        memcpy(pOut + i*outStride, pIn + i*inpStride, xsize*channels*((imType == IMAGING_TYPE_UINT8)?1:4));
-    }
+    // if ( ! (need_horizontal || need_vertical)) {
+    // //printf("memcpy only\n");
+    //     //memcpy(pOut, pIn, xsize*ysize*((imType == IMAGING_TYPE_UINT8)?1:4)*channels);
+    // int i;
+    // for (i = 0; i < ysize; i++)
+    //     memcpy(pOut + i*outStride, pIn + i*inpStride, xsize*channels*((imType == IMAGING_TYPE_UINT8)?1:4));
+    // }
 
     return 0;
 }
